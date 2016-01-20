@@ -381,4 +381,49 @@ if defined? CanCan::ModelAdapters::ActiveRecordAdapter
       end
     end
   end
+
+  context "polymorphic" do
+    before :each do
+      ActiveRecord::Schema.define do
+        create_table( :video_encodings ) do |t|
+          t.integer :video_encodable_id
+          t.string :video_encodable_type
+        end
+        create_table( :video_replies ) do |t|
+          t.integer :id
+          t.integer :response_id
+        end
+        create_table( :responses ) do |t|
+          t.integer :id
+          t.integer :user_id
+        end
+      end
+
+      class VideoEncoding < ActiveRecord::Base
+        belongs_to :video_encodable, polymorphic: true, inverse_of: :video_encoding
+      end
+
+      class VideoReply < ActiveRecord::Base
+        has_one :video_encoding, as: :video_encodable, inverse_of: :video_encodable
+        belongs_to :response
+      end
+
+      class Response < ActiveRecord::Base
+        belongs_to :user
+        has_many :video_replies
+      end
+    end
+
+    it 'fetches accessible records' do
+      user = User.create!
+
+      ability = Ability.new(user)
+      ability.can :read, VideoEncoding, video_encodable: { response: { user_id: user.id }}
+
+      response = Response.create!(user: user)
+      video_reply = VideoReply.create!(response: response)
+      video_encoding = VideoEncoding.create!(video_encodable: video_reply)
+      expect(VideoEncoding.accessible_by(ability)).to eq([video_encoding])
+    end
+  end
 end
