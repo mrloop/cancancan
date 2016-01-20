@@ -32,7 +32,7 @@ module CanCan
         conditions.inject({}) do |result_hash, (name, value)|
           if value.kind_of? Hash
             value = value.dup
-            association_class = model_class.reflect_on_association(name).klass.name.constantize
+            #association_class = model_class.reflect_on_association(name).klass.name.constantize
             nested = value.inject({}) do |nested,(k,v)|
               if v.kind_of? Hash
                 value.delete(k)
@@ -42,11 +42,26 @@ module CanCan
               end
               nested
             end
-            result_hash.merge!(tableized_conditions(nested,association_class))
+            association_classes(name, model_class).each do |klass|
+              result_hash.merge!(tableized_conditions(nested,klass))
+             end
           else
             result_hash[name] = value
           end
           result_hash
+        end
+      end
+
+      def association_classes(name, model_class)
+        association = model_class.reflect_on_association(name)
+        if association.nil?
+          model_class.subclasses.collect do |sub_class|
+            association_classes(name, sub_class)
+          end.flatten
+        elsif association.options[:polymorphic]
+          model_class.pluck(association.foreign_type).uniq.compact.map(&:constantize)
+        else
+          [association.klass.name.constantize]
         end
       end
 
